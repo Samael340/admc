@@ -224,6 +224,9 @@ enum SystemFlagsBit {
 #define CLASS_MSMQ_GROUP "msMQ-Group"
 #define CLASS_MSMQ_QUEUE_ALIAS "msMQ-Custom-Recipient"
 #define CLASS_REMOTE_STORAGE_SERVICE "remoteStorageServicePoint"
+#define CLASS_SITE "site"
+#define CLASS_SERVER "server"
+#define CLASS_SERVERS_CONTAINER "serversContainer"
 // NOTE: for schema object
 #define CLASS_dMD "dMD"
 #define CLASS_CONTROL_ACCESS_RIGHT "controlAccessRight"

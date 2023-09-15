@@ -263,7 +263,7 @@ QString AdInterface::client_user() const {
 // loop, it is set to the value returned by
 // ldap_search_ext_s(). At the end cookie is set back to
 // NULL.
-bool AdInterfacePrivate::search_paged_internal(const char *base, const int scope, const char *filter, char **attributes, QHash<QString, AdObject> *results, AdCookie *cookie, const bool get_sacl) {
+bool AdInterfacePrivate::search_paged_internal(const char *base, const int scope, const char *filter, char **attributes, QHash<QString, AdObject> *results, AdCookie *cookie, const bool get_sacl, int *objects_count) {
     int result;
     LDAPMessage *res = NULL;
     LDAPControl *page_control = NULL;
@@ -303,7 +303,7 @@ bool AdInterfacePrivate::search_paged_internal(const char *base, const int scope
     LDAPControl *server_controls[3] = {page_control, sd_control, NULL};
 
     // Perform search
-    const int attrsonly = 0;
+    int attrsonly = 0;
     result = ldap_search_ext_s(ld, base, scope, filter, attributes, attrsonly, server_controls, NULL, NULL, LDAP_NO_LIMIT, &res);
 
     if ((result != LDAP_SUCCESS) && (result != LDAP_PARTIAL_RESULTS)) {
@@ -319,8 +319,14 @@ bool AdInterfacePrivate::search_paged_internal(const char *base, const int scope
         return false;
     }
 
-    // Collect results for this search
+    // Collect results for this search. If results is nullptr then only increments
     for (LDAPMessage *entry = ldap_first_entry(ld, res); entry != NULL; entry = ldap_next_entry(ld, entry)) {
+        if (objects_count) {
+            (*objects_count)++;
+        }
+        if (results == nullptr) {
+            continue;
+        }
         char *dn_cstr = ldap_get_dn(ld, entry);
         const QString dn(dn_cstr);
         ldap_memfree(dn_cstr);
@@ -520,6 +526,37 @@ AdObject AdInterface::search_object(const QString &dn, const QList<QString> &att
     } else {
         return AdObject();
     }
+}
+
+bool AdInterface::search_objects_count(const QString &object_class, int *objects_count) {
+    const char *base_cstr = cstr(AdInterface::adconfig()->domain_dn());
+    const int scope_int = LDAP_SCOPE_SUBTREE;
+    const char *filter_cstr = cstr(filter_CONDITION(Condition_Equals, ATTRIBUTE_OBJECT_CLASS, object_class));
+    char **attributes_array = (char **) malloc(2 * sizeof(char *));
+    attributes_array[0] = strdup(ATTRIBUTE_DN);
+    attributes_array[1] = NULL;
+    AdCookie cookie;
+
+    bool search_success;
+    while (true) {
+        search_success = d->search_paged_internal(base_cstr, scope_int, filter_cstr, attributes_array, nullptr, &cookie, false, objects_count);
+        if (!search_success) {
+            break;
+        }
+
+        if (!cookie.more_pages()) {
+            break;
+        }
+    }
+
+    if (attributes_array != NULL) {
+        for (int i = 0; attributes_array[i] != NULL; i++) {
+            free(attributes_array[i]);
+        }
+        free(attributes_array);
+    };
+
+    return search_success;
 }
 
 bool AdInterface::attribute_replace_values(const QString &dn, const QString &attribute, const QList<QByteArray> &values, const DoStatusMsg do_msg) {

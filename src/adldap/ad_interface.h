@@ -140,6 +140,8 @@ public:
     // of one object
     AdObject search_object(const QString &dn, const QList<QString> &attributes = QList<QString>(), const bool get_sacl = false);
 
+    bool search_objects_count(const QString &object_class, int *objects_count);
+
     bool attribute_replace_values(const QString &dn, const QString &attribute, const QList<QByteArray> &values, const DoStatusMsg do_msg = DoStatusMsg_Yes);
 
     bool attribute_replace_value(const QString &dn, const QString &attribute, const QByteArray &value, const DoStatusMsg do_msg = DoStatusMsg_Yes);

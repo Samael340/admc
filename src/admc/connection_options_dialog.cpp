@@ -153,6 +153,7 @@ void ConnectionOptionsDialog::accept() {
     const bool domain_was_default = settings_get_variant(SETTING_domain_is_default).toBool();
     const bool domain_is_default = ui->host_default_button->isChecked();
     const bool custom_domain_changed = settings_get_variant(SETTING_custom_domain).toString() != custom_domain;
+    const bool host_is_changed = settings_get_variant(SETTING_host).toString() != selected_host;
 
     const QHash<QString, QVariant> settings = {
         {SETTING_port, port},
@@ -179,7 +180,9 @@ void ConnectionOptionsDialog::accept() {
     const bool domain_is_changed = (domain_was_default != domain_is_default) || custom_domain_changed;
     if (domain_is_changed) {
         load_g_adconfig(ad);
-        emit domain_changed(selected_host);
+    }
+    if (host_is_changed) {
+        emit host_changed(selected_host);
     }
 
     if (!current_dc_is_master_for_role(ad, FSMORole_PDCEmulation)) {

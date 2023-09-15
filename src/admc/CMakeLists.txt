@@ -192,6 +192,10 @@ set(ADMC_SOURCES
     console_impls/all_policies_folder_impl.cpp
     console_impls/policy_ou_impl.cpp
     console_impls/found_policy_impl.cpp
+    console_impls/domain_info_impl.cpp
+
+    domain_info_results_widget/domain_info_results_widget.cpp
+    domain_info_results_widget/domain_info_results_widget.ui
 
     admc.qrc
 )
