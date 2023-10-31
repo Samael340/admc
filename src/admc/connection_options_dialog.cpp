@@ -167,7 +167,8 @@ void ConnectionOptionsDialog::accept() {
 
     AdInterface ad;
     if (ad_failed(ad, parentWidget())) {
-        QDialog::accept();
+        // load back options from config
+        load_connection_options();
         return;
     }
 
