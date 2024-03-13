@@ -24,6 +24,7 @@
 #include <QCoreApplication>
 #include <QList>
 #include <QMutex>
+#include <memory>
 
 class AdInterface;
 class AdConfig;
@@ -61,6 +62,8 @@ public:
     // order of increasing depth, so root path is first
     QList<QString> gpo_get_gpt_contents(const QString &gpt_root_path, bool *ok);
 
+    static void free_smb_ctx(SMBCCTX* ctx);
+
 private:
     static AdConfig *adconfig;
     static bool s_log_searches;
@@ -70,7 +73,7 @@ private:
     static bool s_domain_is_default;
     static QString s_custom_domain;
     static CertStrategy s_cert_strat;
-    static SMBCCTX *smbc;
+    static std::unique_ptr<SMBCCTX, decltype(&free_smb_ctx)> smbc;
     AdInterface *q;
 };
 

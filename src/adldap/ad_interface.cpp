@@ -80,6 +80,8 @@ enum AceMaskFormat {
     AceMaskFormat_Decimal,
 };
 
+using ctx_free_fn_type = decltype(&AdInterfacePrivate::free_smb_ctx);
+
 QList<QString> query_server_for_hosts(const char *dname);
 int sasl_interact_gssapi(LDAP *ld, unsigned flags, void *indefaults, void *in);
 QString get_gpt_sd_string(const AdObject &gpc_object, const AceMaskFormat format);
@@ -93,7 +95,7 @@ QString AdInterfacePrivate::s_custom_domain = QString();
 void *AdInterfacePrivate::s_sasl_nocanon = LDAP_OPT_ON;
 int AdInterfacePrivate::s_port = 0;
 CertStrategy AdInterfacePrivate::s_cert_strat = CertStrategy_Never;
-SMBCCTX *AdInterfacePrivate::smbc = NULL;
+std::unique_ptr<SMBCCTX, ctx_free_fn_type> AdInterfacePrivate::smbc = std::unique_ptr<SMBCCTX, ctx_free_fn_type>(nullptr, &AdInterfacePrivate::free_smb_ctx);
 QMutex AdInterfacePrivate::mutex;
 
 void get_auth_data_fn(const char *pServer, const char *pShare, char *pWorkgroup, int maxLenWorkgroup, char *pUsername, int maxLenUsername, char *pPassword, int maxLenPassword) {
@@ -162,17 +164,19 @@ AdInterface::AdInterface() {
     // NOTE: initialize only once, because otherwise
     // wouldn't be able to have multiple active
     // AdInterface's instances at the same time
-    if (AdInterfacePrivate::smbc == NULL) {
+    if (AdInterfacePrivate::smbc.get() == nullptr) {
         smbc_init(get_auth_data_fn, 0);
-        AdInterfacePrivate::smbc = smbc_new_context();
-        smbc_setOptionUseKerberos(AdInterfacePrivate::smbc, true);
-        smbc_setOptionFallbackAfterKerberos(AdInterfacePrivate::smbc, true);
-        if (!smbc_init_context(AdInterfacePrivate::smbc)) {
+        AdInterfacePrivate::smbc = std::unique_ptr<SMBCCTX, ctx_free_fn_type>(smbc_new_context(), &AdInterfacePrivate::free_smb_ctx);
+        SMBCCTX *ctx = AdInterfacePrivate::smbc.get();
+        smbc_setOptionUseKerberos(ctx, true);
+        smbc_setOptionFallbackAfterKerberos(ctx, true);
+        if (!smbc_init_context(ctx)) {
             d->error_message(connect_error_context, tr("Failed to initialize SMB context."));
+            AdInterfacePrivate::smbc.reset();
 
             return;
         }
-        smbc_set_context(AdInterfacePrivate::smbc);
+        smbc_set_context(ctx);
     }
 
     d->is_connected = true;
@@ -1400,6 +1404,12 @@ QList<QString> AdInterfacePrivate::gpo_get_gpt_contents(const QString &gpt_root_
     }
 
     return seen_stack;
+}
+
+void AdInterfacePrivate::free_smb_ctx(SMBCCTX *ctx) {
+    if (ctx) {
+        smbc_free_context(ctx, 1);
+    }
 }
 
 bool AdInterface::gpo_delete(const QString &dn, bool *deleted_object) {

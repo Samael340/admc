@@ -184,6 +184,7 @@ public:
 
     QString filesys_path_to_smb_path(const QString &filesys_path) const;
 
+
 private:
     AdInterfacePrivate *d;
 
