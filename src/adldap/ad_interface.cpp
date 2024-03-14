@@ -32,6 +32,7 @@
 #include "samba/libsmb_xattr.h"
 #include "samba/ndr_security.h"
 #include "samba/security_descriptor.h"
+#include "samba/smb_context.h"
 
 #include "ad_filter.h"
 
@@ -93,7 +94,6 @@ QString AdInterfacePrivate::s_custom_domain = QString();
 void *AdInterfacePrivate::s_sasl_nocanon = LDAP_OPT_ON;
 int AdInterfacePrivate::s_port = 0;
 CertStrategy AdInterfacePrivate::s_cert_strat = CertStrategy_Never;
-SMBCCTX *AdInterfacePrivate::smbc = NULL;
 QMutex AdInterfacePrivate::mutex;
 
 void get_auth_data_fn(const char *pServer, const char *pShare, char *pWorkgroup, int maxLenWorkgroup, char *pUsername, int maxLenUsername, char *pPassword, int maxLenPassword) {
@@ -157,22 +157,10 @@ AdInterface::AdInterface() {
         return;
     }
 
-    // Initialize SMB context
+    if (!d->smb_context.is_valid()) {
+        d->error_message(connect_error_context, tr("Failed to initialize SMB context."));
 
-    // NOTE: initialize only once, because otherwise
-    // wouldn't be able to have multiple active
-    // AdInterface's instances at the same time
-    if (AdInterfacePrivate::smbc == NULL) {
-        smbc_init(get_auth_data_fn, 0);
-        AdInterfacePrivate::smbc = smbc_new_context();
-        smbc_setOptionUseKerberos(AdInterfacePrivate::smbc, true);
-        smbc_setOptionFallbackAfterKerberos(AdInterfacePrivate::smbc, true);
-        if (!smbc_init_context(AdInterfacePrivate::smbc)) {
-            d->error_message(connect_error_context, tr("Failed to initialize SMB context."));
-
-            return;
-        }
-        smbc_set_context(AdInterfacePrivate::smbc);
+        return;
     }
 
     d->is_connected = true;
@@ -1635,7 +1623,8 @@ bool AdInterface::gpo_check_perms(const QString &gpo, bool *ok) {
     const QString gpt_sd = [&]() {
         const QString filesys_path = gpc_object.get_string(ATTRIBUTE_GPC_FILE_SYS_PATH);
         const QString smb_path = filesys_path_to_smb_path(filesys_path);
-        const char *smb_path_cstr = cstr(smb_path);
+        QByteArray smb_path_array = smb_path.toUtf8();
+        const char *smb_path_cstr = smb_path_array;
 
         // NOTE: the length of gpt sd string doesn't have a
         // well defined bound, so we have to use an
@@ -1644,7 +1633,8 @@ bool AdInterface::gpo_check_perms(const QString &gpo, bool *ok) {
         char *buffer = (char *) malloc(buffer_size);
 
         while (true) {
-            const int getxattr_result = smbc_getxattr(smb_path_cstr, "system.nt_sec_desc.*", buffer, buffer_size);
+            const int getxattr_result = d->smb_context.smbcGetxattr(smb_path_cstr, "system.nt_sec_desc.*", buffer, buffer_size);
+            // smbc_getxattr(smb_path_cstr, "system.nt_sec_desc.*", buffer, buffer_size);
 
             // NOTE: for some reason getxattr() returns positive
             // non-zero return code on success, even though f-n
