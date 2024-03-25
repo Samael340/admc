@@ -234,7 +234,7 @@ PropertiesDialog::PropertiesDialog(AdInterface &ad, const QString &target_arg, C
 
         const bool laps_enabled = [&]() {
             const QList<QString> attribute_list = object.attributes();
-            const bool out = (attribute_list.contains(ATTRIBUTE_LAPS_PASSWORD) && attribute_list.contains(ATTRIBUTE_LAPS_EXPIRATION));
+            const bool out = (attribute_list.contains(ATTRIBUTE_LEGACY_LAPS_PASSWORD) && attribute_list.contains(ATTRIBUTE_LEGACY_LAPS_EXPIRATION));
 
             return out;
         }();
