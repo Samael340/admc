@@ -232,15 +232,28 @@ PropertiesDialog::PropertiesDialog(AdInterface &ad, const QString &target_arg, C
 
         ui->tab_widget->add_tab(os_tab, tr("Operating System"));
 
-        const bool laps_enabled = [&]() {
-            const QList<QString> attribute_list = object.attributes();
-            const bool out = (attribute_list.contains(ATTRIBUTE_LEGACY_LAPS_PASSWORD) && attribute_list.contains(ATTRIBUTE_LEGACY_LAPS_EXPIRATION));
-
-            return out;
-        }();
+        const QStringList attribute_list = object.attributes();
+        const bool laps_is_legacy = attribute_list.contains(ATTRIBUTE_LEGACY_LAPS_PASSWORD) || attribute_list.contains(ATTRIBUTE_LEGACY_LAPS_EXPIRATION);
+        bool laps_is_native;
+        const QStringList native_attrs_list = {
+            ATTRIBUTE_LAPS_PASSWORD,
+            ATTRIBUTE_LAPS_EXPIRATION,
+            ATTRIBUTE_LAPS_ENCRYPTED_PASSWORD,
+            ATTRIBUTE_LAPS_ENCRYPTED_DSRM_PASSWORD,
+            ATTRIBUTE_LAPS_ENCRYPTED_PASSWORD_ATTRIBUTES,
+            ATTRIBUTE_LAPS_ENCRYPTED_PASSWORD_HISTORY,
+            ATTRIBUTE_LAPS_ENCRYPTED_DSRM_PASSWORD_HISTORY
+        };
+        for (const QString &attr : native_attrs_list) {
+            if (attribute_list.contains(attr)) {
+                laps_is_native = true;
+                break;
+            }
+        }
+        const bool laps_enabled = laps_is_legacy || laps_is_native;
 
         if (laps_enabled) {
-            auto laps_tab = new LAPSTab(&edit_list, this);
+            auto laps_tab = new LAPSTab(&edit_list, laps_is_legacy, this);
             ui->tab_widget->add_tab(laps_tab, tr("LAPS"));
         }
     }

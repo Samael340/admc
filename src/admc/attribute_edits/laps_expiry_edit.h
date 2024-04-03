@@ -29,12 +29,13 @@ class QPushButton;
 class LAPSExpiryEdit final : public AttributeEdit {
     Q_OBJECT
 public:
-    LAPSExpiryEdit(QDateTimeEdit *edit_arg, QPushButton *reset_expiry_button, QObject *parent);
+    LAPSExpiryEdit(QDateTimeEdit *edit_arg, QPushButton *reset_expiry_button, const QString &expiry_laps_attr, QObject *parent);
 
     void load(AdInterface &ad, const AdObject &object) override;
     bool apply(AdInterface &ad, const QString &dn) const override;
 
 private:
+    QString expiry_attr;
     QDateTimeEdit *edit;
 
     void reset_expiry();

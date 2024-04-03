@@ -27,8 +27,9 @@
 #include <QDateTimeEdit>
 #include <QPushButton>
 
-LAPSExpiryEdit::LAPSExpiryEdit(QDateTimeEdit *edit_arg, QPushButton *reset_expiry_button, QObject *parent)
+LAPSExpiryEdit::LAPSExpiryEdit(QDateTimeEdit *edit_arg, QPushButton *reset_expiry_button, const QString &expiry_laps_attr, QObject *parent)
 : AttributeEdit(parent) {
+    expiry_attr = expiry_laps_attr;
     edit = edit_arg;
 
     connect(
@@ -42,7 +43,7 @@ LAPSExpiryEdit::LAPSExpiryEdit(QDateTimeEdit *edit_arg, QPushButton *reset_expir
 void LAPSExpiryEdit::load(AdInterface &ad, const AdObject &object) {
     UNUSED_ARG(ad);
 
-    const QDateTime datetime = object.get_datetime(ATTRIBUTE_LEGACY_LAPS_EXPIRATION, g_adconfig);
+    const QDateTime datetime = object.get_datetime(expiry_attr, g_adconfig);
     const QDateTime datetime_local = datetime.toLocalTime();
 
     edit->setDateTime(datetime_local);
@@ -52,7 +53,7 @@ bool LAPSExpiryEdit::apply(AdInterface &ad, const QString &dn) const {
     const QDateTime datetime_local = edit->dateTime();
     const QDateTime datetime = datetime_local.toUTC();
 
-    const bool success = ad.attribute_replace_datetime(dn, ATTRIBUTE_LEGACY_LAPS_EXPIRATION, datetime);
+    const bool success = ad.attribute_replace_datetime(dn, expiry_attr, datetime);
 
     return success;
 }

@@ -35,7 +35,7 @@ class LAPSTab final : public QWidget {
 public:
     Ui::LAPSTab *ui;
 
-    LAPSTab(QList<AttributeEdit *> *edit_list, QWidget *parent);
+    LAPSTab(QList<AttributeEdit *> *edit_list, bool is_legacy, QWidget *parent);
     ~LAPSTab();
 };
 
