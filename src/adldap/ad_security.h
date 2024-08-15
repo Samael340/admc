@@ -41,6 +41,9 @@ typedef void TALLOC_CTX;
 extern const QList<QString> well_known_sid_list;
 extern const QList<uint32_t> common_rights_list;
 
+// TODO: Refactor code with enums and classes below
+// considering all ACE possible parameters and better
+// readability in general
 enum SecurityRightStateType {
     SecurityRightStateType_Allow,
     SecurityRightStateType_Deny,
@@ -102,8 +105,10 @@ void security_descriptor_remove_trustee(security_descriptor *sd, const QList<QBy
 // LOT more than just add rights. They also take care
 // of superior and subordinate rights to follow a logic
 // of a typical gui checklist of rights.
-void security_descriptor_add_right(security_descriptor *sd, AdConfig *adconfig, const QList<QString> &class_list, const QByteArray &trustee, const SecurityRight &right, const bool allow);
-void security_descriptor_remove_right(security_descriptor *sd, AdConfig *adconfig, const QList<QString> &class_list, const QByteArray &trustee, const SecurityRight &right, const bool allow);
+void security_descriptor_add_right(security_descriptor *sd, AdConfig *adconfig, const QList<QString> &class_list,
+                                   const QByteArray &trustee, const SecurityRight &right, const bool allow, uint8_t flags = 0);
+void security_descriptor_remove_right(security_descriptor *sd, AdConfig *adconfig, const QList<QString> &class_list,
+                                      const QByteArray &trustee, const SecurityRight &right, const bool allow, uint8_t flags = 0);
 
 QList<SecurityRight> ad_security_get_right_list_for_class(AdConfig *adconfig, const QList<QString> &class_list);
 QList<SecurityRight> ad_security_get_common_rights();
