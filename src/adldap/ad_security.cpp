@@ -295,7 +295,7 @@ bool ad_security_get_protected_against_deletion(const AdObject &object) {
 
     const bool is_enabled_for_trustee = [&]() {
         for (const uint32_t &mask : protect_deletion_mask_list) {
-            SecurityRight right{mask, QByteArray()};
+            SecurityRight right{mask, QByteArray(), QByteArray()};
             const SecurityRightState state = security_descriptor_get_right(sd, trustee_everyone, right);
 
             const bool deny = state.get(SecurityRightStateInherited_No, SecurityRightStateType_Deny);
@@ -323,7 +323,7 @@ bool ad_security_get_user_cant_change_pass(const AdObject *object, AdConfig *adc
             const bool is_denied = [&]() {
                 const QByteArray trustee = sid_string_to_bytes(trustee_cn);
                 const QByteArray change_pass_right = adconfig->get_right_guid("User-Change-Password");
-                SecurityRight right{SEC_ADS_CONTROL_ACCESS, change_pass_right};
+                SecurityRight right{SEC_ADS_CONTROL_ACCESS, change_pass_right, QByteArray()};
                 const SecurityRightState state = security_descriptor_get_right(sd, trustee, right);
                 const bool out_denied = state.get(SecurityRightStateInherited_No, SecurityRightStateType_Deny);
 
@@ -368,7 +368,7 @@ bool ad_security_set_user_cant_change_pass(AdInterface *ad, const QString &dn, c
         // NOTE: using "base" f-ns because we don't want
         // to touch superiors/subordinates
         const bool allow = !enabled;
-        SecurityRight right{SEC_ADS_CONTROL_ACCESS, change_pass_right};
+        SecurityRight right{SEC_ADS_CONTROL_ACCESS, change_pass_right, QByteArray()};
         security_descriptor_remove_right_base(sd, trustee, right, !allow);
         security_descriptor_add_right_base(sd, trustee, right, allow);
     }
@@ -401,7 +401,7 @@ bool ad_security_set_protected_against_deletion(AdInterface &ad, const QString d
         // there are any allow entries, they are
         // untouched.
         for (const uint32_t &mask : protect_deletion_mask_list) {
-            SecurityRight right{mask, QByteArray()};
+            SecurityRight right{mask, QByteArray(), QByteArray()};
             if (enabled) {
                 security_descriptor_add_right_base(out, trustee_everyone, right, false);
             } else {
@@ -968,10 +968,10 @@ QList<SecurityRight> ad_security_get_superior_right_list(const SecurityRight &ri
 
     const bool object_present = !right.object_type.isEmpty();
 
-    const SecurityRight generic_all = {SEC_ADS_GENERIC_ALL, QByteArray()};
-    const SecurityRight generic_read = {SEC_ADS_GENERIC_READ, QByteArray()};
-    const SecurityRight generic_write = {SEC_ADS_GENERIC_WRITE, QByteArray()};
-    const SecurityRight all_extended_rights = {SEC_ADS_CONTROL_ACCESS, QByteArray()};
+    const SecurityRight generic_all = {SEC_ADS_GENERIC_ALL, QByteArray(), QByteArray()};
+    const SecurityRight generic_read = {SEC_ADS_GENERIC_READ, QByteArray(), QByteArray()};
+    const SecurityRight generic_write = {SEC_ADS_GENERIC_WRITE, QByteArray(), QByteArray()};
+    const SecurityRight all_extended_rights = {SEC_ADS_CONTROL_ACCESS, QByteArray(), QByteArray()};
 
     // NOTE: order is important, because we want to
     // process "more superior" rights first. "Generic

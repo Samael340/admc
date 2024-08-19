@@ -70,6 +70,13 @@ class SecurityRight {
 public:
     uint32_t access_mask;
     QByteArray object_type;
+    QByteArray inherited_object_type;
+
+    inline bool operator ==(const SecurityRight &another) {
+        return (another.access_mask == access_mask) &&
+                (another.object_type == object_type) &&
+                (another.inherited_object_type == inherited_object_type);
+    }
 };
 
 QString ad_security_get_well_known_trustee_name(const QByteArray &trustee);
