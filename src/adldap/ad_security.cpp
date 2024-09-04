@@ -36,7 +36,8 @@
 QByteArray dom_sid_to_bytes(const dom_sid &sid);
 dom_sid dom_sid_from_bytes(const QByteArray &bytes);
 QByteArray dom_sid_string_to_bytes(const dom_sid &sid);
-bool check_ace_match(const security_ace &ace, const QByteArray &trustee, const SecurityRight &right, const bool allow);
+bool ace_match_without_access_mask(const security_ace &ace, const QByteArray &trustee, const SecurityRight &right, const bool allow);
+bool ace_match(const security_ace &ace, const QByteArray &trustee, const SecurityRight &right, const bool allow);
 QList<security_ace> security_descriptor_get_dacl(const security_descriptor *sd);
 void ad_security_replace_dacl(security_descriptor *sd, const QList<security_ace> &new_dacl);
 uint32_t ad_security_map_access_mask(const uint32_t access_mask);
@@ -296,7 +297,7 @@ bool ad_security_get_protected_against_deletion(const AdObject &object) {
     const bool is_enabled_for_trustee = [&]() {
         for (const uint32_t &mask : protect_deletion_mask_list) {
             SecurityRight right{mask, QByteArray(), QByteArray(), 0};
-            const SecurityRightState state = security_descriptor_get_right(sd, trustee_everyone, right);
+            const SecurityRightState state = security_descriptor_get_right_state(sd, trustee_everyone, right);
 
             const bool deny = state.get(SecurityRightStateInherited_No, SecurityRightStateType_Deny);
 
@@ -324,7 +325,7 @@ bool ad_security_get_user_cant_change_pass(const AdObject *object, AdConfig *adc
                 const QByteArray trustee = sid_string_to_bytes(trustee_cn);
                 const QByteArray change_pass_right = adconfig->get_right_guid("User-Change-Password");
                 SecurityRight right{SEC_ADS_CONTROL_ACCESS, change_pass_right, QByteArray(), 0};
-                const SecurityRightState state = security_descriptor_get_right(sd, trustee, right);
+                const SecurityRightState state = security_descriptor_get_right_state(sd, trustee, right);
                 const bool out_denied = state.get(SecurityRightStateInherited_No, SecurityRightStateType_Deny);
 
                 return out_denied;
@@ -455,11 +456,8 @@ QList<security_ace> security_descriptor_get_dacl(const security_descriptor *sd) 
     return out;
 }
 
-SecurityRightState security_descriptor_get_right(const security_descriptor *sd, const QByteArray &trustee, const SecurityRight &right) {
+SecurityRightState security_descriptor_get_right_state(const security_descriptor *sd, const QByteArray &trustee, const SecurityRight &right) {
     bool out_data[SecurityRightStateInherited_COUNT][SecurityRightStateType_COUNT];
-
-    const uint32_t access_mask = ad_security_map_access_mask(right.access_mask);
-
     for (int x = 0; x < SecurityRightStateInherited_COUNT; x++) {
         for (int y = 0; y < SecurityRightStateType_COUNT; y++) {
             out_data[x][y] = false;
@@ -467,71 +465,24 @@ SecurityRightState security_descriptor_get_right(const security_descriptor *sd, 
     }
 
     const QList<security_ace> dacl = security_descriptor_get_dacl(sd);
-
+    // Set only SEC_ACE_FLAG_INHERITED_ACE flag to get whether right is inherited or not.
+    // This move excludes other possible flags.
+    uint8_t inherited_flag = right.flags & (uint8_t)SEC_ACE_FLAG_INHERITED_ACE;
+    SecurityRight right_inheritance = {right.access_mask, right.object_type,
+                                     right.inherited_object_type, inherited_flag};
     for (const security_ace &ace : dacl) {
-        const bool match = [&]() {
-            const bool trustee_match = [&]() {
-                const dom_sid trustee_sid = dom_sid_from_bytes(trustee);
-                const bool trustees_are_equal = (dom_sid_compare(&ace.trustee, &trustee_sid) == 0);
+        const bool match_for_allow = ace_match(ace, trustee, right_inheritance, true);
+        const bool match_for_deny = ace_match(ace, trustee, right_inheritance, false);
 
-                return trustees_are_equal;
-            }();
-
-            const bool access_mask_match = bitmask_is_set(ace.access_mask, access_mask);
-
-            const bool object_match = [&]() {
-                const bool object_present = ace_types_with_object.contains(ace.type);
-
-                if (object_present) {
-                    const GUID out_guid = ace.object.object.type.type;
-                    const QByteArray ace_object_type = QByteArray((char *) &out_guid, sizeof(GUID));
-                    const bool types_are_equal = (ace_object_type == right.object_type);
-
-                    return types_are_equal;
-                } else {
-                    // NOTE: if compared ace doesn't
-                    // have an object it can still
-                    // match if it's access mask
-                    // matches with given ace. Example:
-                    // ace that allows "generic read"
-                    // (mask contains bit for "read
-                    // property" and object is empty)
-                    // will also allow right for
-                    // reading personal info (mask *is*
-                    // "read property" and contains
-                    // some object)
-                    return access_mask_match;
-                }
-            }();
-
-            const bool out = (trustee_match && access_mask_match && object_match);
-
-            return out;
-        }();
-
-        if (match) {
-            bool state_list[2];
-            state_list[SecurityRightStateType_Allow] = ace_type_allow_set.contains(ace.type);
-            state_list[SecurityRightStateType_Deny] = ace_type_deny_set.contains(ace.type);
-
-            const int inherit_i = [&]() {
-                const bool ace_is_inherited = bitmask_is_set(ace.flags, SEC_ACE_FLAG_INHERITED_ACE);
-
-                if (ace_is_inherited) {
-                    return SecurityRightStateInherited_Yes;
-                } else {
-                    return SecurityRightStateInherited_No;
-                }
-            }();
-
-            for (int type_i = 0; type_i < SecurityRightStateType_COUNT; type_i++) {
-                const bool right_state = state_list[type_i];
-
-                if (right_state) {
-                    out_data[inherit_i][type_i] = true;
-                }
-            }
+        // If there is no match, continue to search corresponding ACEs
+        if (!(match_for_allow || match_for_deny)) {
+            continue;
         }
+
+        const int state_inherited = bitmask_is_set(ace.flags, SEC_ACE_FLAG_INHERITED_ACE) ? SecurityRightStateInherited_Yes :
+                                                                                            SecurityRightStateInherited_No;
+        const int state_allowed = match_for_allow ? SecurityRightStateType_Allow : SecurityRightStateType_Deny;
+        out_data[state_inherited][state_allowed] = true;
     }
 
     const SecurityRightState out = SecurityRightState(out_data);
@@ -567,7 +518,7 @@ void security_descriptor_add_right_base(security_descriptor *sd, const QByteArra
             // such ace would not match by mask and
             // that's fine.
 
-            const bool match = check_ace_match(ace, trustee, right, allow);
+            const bool match = ace_match_without_access_mask(ace, trustee, right, allow);
 
             if (match) {
                 return i;
@@ -660,26 +611,23 @@ void security_descriptor_add_right_base(security_descriptor *sd, const QByteArra
     }
 }
 
+bool ace_match(const security_ace &ace, const QByteArray &trustee, const SecurityRight &right, const bool allow) {
+    const uint32_t access_mask = ad_security_map_access_mask(right.access_mask);
+    const bool access_mask_match = bitmask_is_set(ace.access_mask, access_mask);
+
+    return access_mask_match && ace_match_without_access_mask(ace, trustee, right, allow);
+}
+
 // Checks if ace matches given members. Note that
 // access masks are not compared. Compare them yourself
 // if you need to further filter by masks.
-bool check_ace_match(const security_ace &ace, const QByteArray &trustee, const SecurityRight &right, const bool allow) {
-    const bool type_match = [&]() {
-        const security_ace_type ace_type = ace.type;
+bool ace_match_without_access_mask(const security_ace &ace, const QByteArray &trustee, const SecurityRight &right, const bool allow) {
+    const security_ace_type ace_type = ace.type;
+    const bool ace_allow = ace_type_allow_set.contains(ace_type);
+    const bool ace_deny = ace_type_deny_set.contains(ace_type);
+    const bool type_match = (allow && ace_allow) || (!allow && ace_deny);
 
-        const bool ace_allow = ace_type_allow_set.contains(ace_type);
-        const bool ace_deny = ace_type_deny_set.contains(ace_type);
-
-        if (allow && ace_allow) {
-            return true;
-        } else if (!allow && ace_deny) {
-            return true;
-        } else {
-            return false;
-        }
-    }();
-
-const bool flags_match = bitmask_is_set(ace.flags, right.flags);
+    const bool flags_match = bitmask_is_set(ace.flags, right.flags);
 
     const bool trustee_match = [&]() {
         const dom_sid trustee_sid = dom_sid_from_bytes(trustee);
@@ -730,7 +678,7 @@ void security_descriptor_remove_right_base(security_descriptor *sd, const QByteA
         const QList<security_ace> old_dacl = security_descriptor_get_dacl(sd);
 
         for (const security_ace &ace : old_dacl) {
-            const bool match = check_ace_match(ace, trustee, right, allow);
+            const bool match = ace_match_without_access_mask(ace, trustee, right, allow);
             const bool ace_mask_contains_mask = bitmask_is_set(ace.access_mask, access_mask);
 
             if (match && ace_mask_contains_mask) {
@@ -887,7 +835,7 @@ void security_descriptor_add_right(security_descriptor *sd, AdConfig *adconfig, 
     const QList<SecurityRight> superior_list = ad_security_get_superior_right_list(right);
     for (const SecurityRight &superior : superior_list) {
         const bool opposite_superior_is_set = [&]() {
-            const SecurityRightState state = security_descriptor_get_right(sd, trustee, superior);
+            const SecurityRightState state = security_descriptor_get_right_state(sd, trustee, superior);
             const SecurityRightStateType type = [&]() {
                 // NOTE: opposite!
                 if (!allow) {
@@ -945,7 +893,7 @@ void security_descriptor_remove_right(security_descriptor *sd, AdConfig *adconfi
     // Remove superiors
     for (const SecurityRight &superior : target_superior_list) {
         const bool superior_is_set = [&]() {
-            const SecurityRightState state = security_descriptor_get_right(sd, trustee, superior);
+            const SecurityRightState state = security_descriptor_get_right_state(sd, trustee, superior);
             const SecurityRightStateType type = [&]() {
                 if (allow) {
                     return SecurityRightStateType_Allow;
@@ -995,7 +943,7 @@ QList<SecurityRight> ad_security_get_superior_right_list(const SecurityRight &ri
 
     uint32_t access_mask = right.access_mask;
 
-    const bool object_present = !right.object_type.isEmpty();
+    const bool object_present = !right.object_type.isEmpty() && !right.inherited_object_type.isEmpty();
 
     const SecurityRight generic_all = {SEC_ADS_GENERIC_ALL, QByteArray(), QByteArray(), 0};
     const SecurityRight generic_read = {SEC_ADS_GENERIC_READ, QByteArray(), QByteArray(), 0};
@@ -1030,7 +978,7 @@ QList<SecurityRight> ad_security_get_subordinate_right_list(AdConfig *adconfig, 
 
     uint32_t access_mask = right.access_mask;
 
-    const bool object_present = !right.object_type.isEmpty();
+    const bool object_present = !right.object_type.isEmpty() && !right.inherited_object_type.isEmpty();
 
     const QList<SecurityRight> right_list_for_target = ad_security_get_right_list_for_class(adconfig, class_list);
 
@@ -1140,10 +1088,7 @@ QList<SecurityRight> ad_security_get_common_rights() {
     QList<SecurityRight> out;
 
     for (const uint32_t &access_mask : common_rights_list) {
-        SecurityRight right;
-        right.access_mask = access_mask;
-        right.object_type = QByteArray();
-
+        SecurityRight right{access_mask, QByteArray(), QByteArray(), 0};
         out.append(right);
     }
 
@@ -1167,9 +1112,7 @@ QList<SecurityRight> ad_security_get_extended_rights_for_class(AdConfig *adconfi
             const bool mask_match = bitmask_is_set(valid_accesses, access_mask);
 
             if (mask_match) {
-                SecurityRight right;
-                right.access_mask = access_mask;
-                right.object_type = rights_guid;
+                SecurityRight right{access_mask, rights_guid, QByteArray(), 0};
 
                 out.append(right);
             }
@@ -1177,4 +1120,96 @@ QList<SecurityRight> ad_security_get_extended_rights_for_class(AdConfig *adconfi
     }
 
     return out;
+}
+
+QList<SecurityRight> creation_deletion_rights_for_class(AdConfig *adconfig, const QString &obj_class) {
+    const QByteArray obj_class_guid = adconfig->guid_from_class(obj_class);
+
+    const QList<SecurityRight> rights = {
+        SecurityRight {
+                SEC_ADS_CREATE_CHILD,
+                obj_class_guid,
+                QByteArray(),
+                SEC_ACE_FLAG_CONTAINER_INHERIT | SEC_ACE_FLAG_INHERIT_ONLY
+            },
+        SecurityRight {
+                SEC_ADS_DELETE_CHILD,
+                obj_class_guid,
+                QByteArray(),
+                SEC_ACE_FLAG_CONTAINER_INHERIT | SEC_ACE_FLAG_INHERIT_ONLY
+            }
+    };
+
+    return rights;
+}
+
+QList<SecurityRight> control_children_class_right(AdConfig *adconfig, const QString &obj_class) {
+    const QByteArray obj_class_guid = adconfig->guid_from_class(obj_class);
+    const QList<SecurityRight> rights = {
+        SecurityRight {
+                SEC_ADS_GENERIC_ALL,
+                QByteArray(),
+                obj_class_guid,
+                SEC_ACE_FLAG_CONTAINER_INHERIT
+            }
+    };
+
+    return rights;
+}
+
+QList<SecurityRight> children_class_read_write_prop_rights(AdConfig *adconfig, const QString &obj_class, const QString &attribute) {
+    const QByteArray obj_class_guid = adconfig->guid_from_class(obj_class);
+    const QByteArray property_guid = adconfig->attribute_to_guid(attribute);
+
+    const QList<SecurityRight> rights = {
+        SecurityRight {
+            SEC_ADS_READ_PROP,
+            property_guid,
+            obj_class_guid,
+            SEC_ACE_FLAG_CONTAINER_INHERIT | SEC_ACE_FLAG_INHERIT_ONLY
+        },
+        SecurityRight {
+            SEC_ADS_WRITE_PROP,
+            property_guid,
+            obj_class_guid,
+            SEC_ACE_FLAG_CONTAINER_INHERIT | SEC_ACE_FLAG_INHERIT_ONLY
+        }
+    };
+
+    return rights;
+}
+
+QList<SecurityRight> read_all_children_class_info_rights(AdConfig *adconfig, const QString &obj_class) {
+    const QByteArray obj_class_guid = adconfig->guid_from_class(obj_class);
+    const QList<SecurityRight> rights = {
+        SecurityRight {
+                SEC_ADS_READ_PROP,
+                QByteArray(),
+                obj_class_guid,
+                SEC_ACE_FLAG_CONTAINER_INHERIT | SEC_ACE_FLAG_INHERIT_ONLY
+            }
+    };
+
+    return rights;
+}
+
+QList<SecurityRight> read_write_prop_rights(AdConfig *adconfig, const QString &attribute) {
+    const QByteArray property_guid = adconfig->attribute_to_guid(attribute);
+
+    const QList<SecurityRight> rights = {
+        SecurityRight {
+            SEC_ADS_READ_PROP,
+            property_guid,
+            QByteArray(),
+            SEC_ACE_FLAG_CONTAINER_INHERIT
+        },
+        SecurityRight {
+            SEC_ADS_WRITE_PROP,
+            property_guid,
+            QByteArray(),
+            SEC_ACE_FLAG_CONTAINER_INHERIT
+        }
+    };
+
+    return rights;
 }

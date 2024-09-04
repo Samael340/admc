@@ -1,8 +1,8 @@
-/*
+﻿/*
  * ADMC - AD Management Center
  *
- * Copyright (C) 2020-2022 BaseALT Ltd.
- * Copyright (C) 2020-2022 Dmitry Degtyarev
+ * Copyright (C) 2020-2024 BaseALT Ltd.
+ * Copyright (C) 2020-2024 Dmitry Degtyarev
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -63,8 +63,15 @@ private:
     bool data[SecurityRightStateInherited_COUNT][SecurityRightStateType_COUNT];
 };
 
+// TODO: Unite SecutityRight and SecutityRightState structs into the ACE-like
+// struct/class or remove them and use samba ACE structures. This and functions below
+// can be implemented in Security descriptor manager as an option.
+
+// NOTE: Each SecurityRight object represents ONLY ONE permission, i.e. contains
+// only one access mask bit. It can be seen in ad_security_get_common_rights() and
+// ad_security_get_extended_rights_for_class().
 struct SecurityRight {
-    uint32_t access_mask;
+uint32_t access_mask;
     QByteArray object_type;
     QByteArray inherited_object_type;
     uint8_t flags;
@@ -76,6 +83,8 @@ struct SecurityRight {
                 (another.flags == flags);
     }
 };
+Q_DECLARE_METATYPE(SecurityRight)
+
 
 QString ad_security_get_well_known_trustee_name(const QByteArray &trustee);
 QString ad_security_get_trustee_name(AdInterface &ad, const QByteArray &trustee);
@@ -97,7 +106,7 @@ security_descriptor *security_descriptor_copy(security_descriptor *sd);
 void security_descriptor_free(security_descriptor *sd);
 void security_descriptor_sort_dacl(security_descriptor *sd);
 QList<QByteArray> security_descriptor_get_trustee_list(security_descriptor *sd);
-SecurityRightState security_descriptor_get_right(const security_descriptor *sd, const QByteArray &trustee, const SecurityRight &right);
+SecurityRightState security_descriptor_get_right_state(const security_descriptor *sd, const QByteArray &trustee, const SecurityRight &right);
 void security_descriptor_print(security_descriptor *sd, AdInterface &ad);
 bool security_descriptor_verify_acl_order(security_descriptor *sd);
 
@@ -120,5 +129,11 @@ QList<SecurityRight> ad_security_get_common_rights();
 QList<SecurityRight> ad_security_get_extended_rights_for_class(AdConfig *adconfig, const QList<QString> &class_list);
 QList<SecurityRight> ad_security_get_superior_right_list(const SecurityRight &right);
 QList<SecurityRight> ad_security_get_subordinate_right_list(AdConfig *adconfig, const SecurityRight &right, const QList<QString> &class_list);
+
+QList<SecurityRight> creation_deletion_rights_for_class(AdConfig *adconfig, const QString &obj_class);
+QList<SecurityRight> control_children_class_right(AdConfig *adconfig, const QString &obj_class);
+QList<SecurityRight> children_class_read_write_prop_rights(AdConfig *adconfig, const QString &obj_class, const QString &attribute);
+QList<SecurityRight> read_all_children_class_info_rights(AdConfig *adconfig, const QString &obj_class);
+QList<SecurityRight> read_write_prop_rights(AdConfig *adconfig, const QString &attribute);
 
 #endif /* AD_SECURITY_H */

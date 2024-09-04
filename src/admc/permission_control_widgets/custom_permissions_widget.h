@@ -15,7 +15,7 @@ public:
 
 private:
     virtual void on_item_changed(QStandardItem *item) override;
-    virtual void update_model_rights(const QModelIndex &index) override;
+    virtual void update_model_right_items(const QModelIndex &index) override;
 };
 
 #endif // CUSTOMPERMISSIONSWIDGET_H

@@ -1,3 +1,22 @@
+/*
+ * ADMC - AD Management Center
+ *
+ * Copyright (C) 2020-2024 BaseALT Ltd.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "common_permissions_widget.h"
 
 #include "adldap.h"
@@ -34,7 +53,7 @@ CommonPermissionsWidget::CommonPermissionsWidget(QWidget *parent) : PermissionsW
     rights_sort_model->setSourceModel(rights_model);
 
     rights_view->setModel(rights_sort_model);
-    rights_view->setColumnWidth(AceColumn_Name, 400);
+    rights_view->setColumnWidth(PermissionColumn_Name, 400);
 
     settings_restore_header_state(SETTING_common_permissions_header_state, rights_view->header());
 }
@@ -53,19 +72,20 @@ void CommonPermissionsWidget::init(const QStringList &target_classes, security_d
     // state of items changes during editing.
     const QList<SecurityRight> right_list = ad_security_get_common_rights();
     for (const SecurityRight &right : right_list) {
-        const QList<QStandardItem *> row = make_item_row(AceColumn_COUNT);
+        const QList<QStandardItem *> row = make_item_row(PermissionColumn_COUNT);
 
         // TODO: for russian, probably do "read/write
         // property - [property name]" to avoid having
         // to do suffixes properties
         const QString right_name = ad_security_get_right_name(g_adconfig, right, language);
 
-        row[AceColumn_Name]->setText(right_name);
-        row[AceColumn_Allowed]->setCheckable(true);
-        row[AceColumn_Denied]->setCheckable(true);
+        row[PermissionColumn_Name]->setText(right_name);
+        row[PermissionColumn_Allowed]->setCheckable(true);
+        row[PermissionColumn_Denied]->setCheckable(true);
 
-        row[0]->setData(right.access_mask, RightsItemRole_AccessMask);
-        row[0]->setData(right.object_type, RightsItemRole_ObjectType);
+        QVariant rights_data;
+        rights_data.setValue(QList<SecurityRight>({right}));
+        row[0]->setData(rights_data, RightsItemRole_SecurityRights);
 
         rights_model->appendRow(row);
     }

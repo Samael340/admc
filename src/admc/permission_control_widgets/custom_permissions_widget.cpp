@@ -28,6 +28,6 @@ void CustomPermissionsWidget::on_item_changed(QStandardItem *item) {
 
 }
 
-void CustomPermissionsWidget::update_model_rights(const QModelIndex &index) {
+void CustomPermissionsWidget::update_model_right_items(const QModelIndex &index) {
 
 }

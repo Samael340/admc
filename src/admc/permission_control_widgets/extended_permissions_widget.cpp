@@ -1,3 +1,22 @@
+/*
+ * ADMC - AD Management Center
+ *
+ * Copyright (C) 2020-2024 BaseALT Ltd.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "extended_permissions_widget.h"
 
 #include "adldap.h"
@@ -71,7 +90,9 @@ ExtendedPermissionsWidget::ExtendedPermissionsWidget(QWidget *parent) : Permissi
     rights_sort_model->setSourceModel(rights_model);
 
     rights_view->setModel(rights_sort_model);
-    rights_view->setColumnWidth(AceColumn_Name, 400);
+    rights_view->setColumnWidth(PermissionColumn_Name, 400);
+
+    load_common_tasks();
 
     settings_restore_header_state(SETTING_extended_permissions_header_state, rights_view->header());
 }
@@ -85,37 +106,9 @@ void ExtendedPermissionsWidget::init(const QStringList &target_classes, security
     target_class_list = target_classes;
     rights_model->removeRows(0, rights_model->rowCount());
 
-    QList<QStandardItem *> current_obj_row = create_title_row(tr("Current object permissions"), ExtRightsItemType_CurrentObjTitile);
-    const QList<SecurityRight> object_right_list = ad_security_get_extended_rights_for_class(g_adconfig, target_class_list);
-    append_child_right_items(current_obj_row[0], object_right_list, tr("There are no extended rights for this class of objects"));
 
-    QList<QStandardItem *> inherited_objs_row = create_title_row(tr("Child object permissions"), ExtRightsItemType_InheritedObjsTitle);
-    const QString obj_class = target_class_list.last();
-    QStringList inferior_classes = g_adconfig->get_possible_inferiors(obj_class);
-
-    rights_model->appendRow(current_obj_row);
-    rights_model->appendRow(inherited_objs_row);
-
-    // Remove object's classes because corresponding rights have been already received
-    // and appened to object's extended rights
-    for(const QString &class_to_remove : target_class_list) {
-        if (inferior_classes.contains(class_to_remove)) {
-            inferior_classes.removeAll(class_to_remove);
-        }
-    }
-
-    QList<SecurityRight> inferior_right_list;
-    for(const QString &inferior : inferior_classes) {
-        QList<SecurityRight> appended_right_list = ad_security_get_extended_rights_for_class(g_adconfig, {inferior});
-        // Remove duplicated extended rights
-        for (const SecurityRight &right : appended_right_list) {
-            if (inferior_right_list.contains(right)) {
-                continue;
-            }
-            inferior_right_list.append(right);
-        }
-    }
-    append_child_right_items(inherited_objs_row[0], inferior_right_list, tr("There are no extended rights for inferior classes of the given object"));
+    append_extended_right_items();
+    append_common_task_items();
 
     if (read_only) {
         make_model_rights_read_only(QModelIndex());
@@ -124,11 +117,11 @@ void ExtendedPermissionsWidget::init(const QStringList &target_classes, security
     rights_sort_model->sort(0);
 }
 
-void ExtendedPermissionsWidget::update_model_rights(const QModelIndex &parent) {
+void ExtendedPermissionsWidget::update_model_right_items(const QModelIndex &parent) {
     Q_UNUSED(parent)
     for (int row = 0; row < rights_model->rowCount(); row++) {
         const QModelIndex title_index = rights_model->index(row, 0);
-        PermissionsWidget::update_model_rights(title_index);
+        PermissionsWidget::update_model_right_items(title_index);
     }
 
     rights_view->expandAll();
@@ -142,30 +135,34 @@ void ExtendedPermissionsWidget::make_model_rights_read_only(const QModelIndex &p
     }
 }
 
-QList<QStandardItem *> ExtendedPermissionsWidget::make_right_item_row(const SecurityRight &right, uint8_t flags) {
-    const QList<QStandardItem *> row = make_item_row(AceColumn_COUNT);
+void ExtendedPermissionsWidget::on_item_changed(QStandardItem *item) {
 
-    const QString right_name = ad_security_get_right_name(g_adconfig, right, language);
+}
 
-    const QString object_type_name = g_adconfig->get_right_name(right.object_type, language);
+QList<QStandardItem *> ExtendedPermissionsWidget::make_right_item_row(const QString &name, const QList<SecurityRight> &rights) {
+    const QList<QStandardItem *> row = make_item_row(PermissionColumn_COUNT);
 
-    row[AceColumn_Name]->setText(right_name);
-    row[AceColumn_Allowed]->setCheckable(true);
-    row[AceColumn_Denied]->setCheckable(true);
+    const QString right_name = ad_security_get_right_name(g_adconfig, rights, language);
 
-    row[0]->setData(right.access_mask, RightsItemRole_AccessMask);
-    row[0]->setData(right.object_type, RightsItemRole_ObjectType);
+    const QString object_type_name = g_adconfig->get_right_name(rights.object_type, language);
+
+    row[PermissionColumn_Name]->setText(name);
+    row[PermissionColumn_Allowed]->setCheckable(true);
+    row[PermissionColumn_Denied]->setCheckable(true);
+
+    row[0]->setData(rights.access_mask, RightsItemRole_AccessMask);
+    row[0]->setData(rights.object_type, RightsItemRole_ObjectType);
     row[0]->setData(object_type_name, RightsItemRole_ObjectTypeName);
-    row[0]->setData(ExtRightsItemType_ExtRight, RightsItemRole_ObjectTypeName);
-    row[0]->setData(int(flags), RightsItemRole_ACE_Flags);
-    row[0]->setData(right.inherited_object_type, RightsItemRole_InheritedObjectType);
+    row[0]->setData(ExtRightsItemType_ExtRight, RightsItemRole_ItemType);
+    row[0]->setData(uint(flags), RightsItemRole_ACE_Flags);
+    row[0]->setData(rights.inherited_object_type, RightsItemRole_InheritedObjectType);
     row[0]->setEditable(false);
 
     return row;
 }
 
 QList<QStandardItem *> ExtendedPermissionsWidget::create_title_row(const QString &text, ExtRightsItemType type) {
-    const QList<QStandardItem *> row = make_item_row(AceColumn_COUNT);
+    const QList<QStandardItem *> row = make_item_row(PermissionColumn_COUNT);
     for (QStandardItem *title_item : row) {
         title_item->setEditable(false);
     }
@@ -180,26 +177,85 @@ QList<QStandardItem *> ExtendedPermissionsWidget::create_title_row(const QString
     return row;
 }
 
-void ExtendedPermissionsWidget::append_child_right_items(QStandardItem *title_item, QList<SecurityRight> rights, const QString &default_item_text) {
-    if (rights.isEmpty()) {
-        title_item->appendRow(new QStandardItem(default_item_text));
-        return;
-    }
+void ExtendedPermissionsWidget::append_extended_right_items() {
+    const QList<SecurityRight> extended_right_list = ad_security_get_extended_rights_for_class(g_adconfig, target_class_list);
 
-    uint8_t flags = 0;
-    ExtRightsItemType parent_item_type = (ExtRightsItemType)title_item->data(RightsItemRole_ItemType).toInt();
-    if (parent_item_type == ExtRightsItemType_InheritedObjsTitle) {
-        flags = SEC_ACE_FLAG_INHERIT_ONLY /*| SEC_ACE_FLAG_NO_PROPAGATE_INHERIT*/;
-    }
-
-    for(const SecurityRight &right : rights) {
-       QList<QStandardItem*> right_row =  make_right_item_row(right, flags);
+    for(const SecurityRight &right : extended_right_list) {
+       QList<QStandardItem*> right_row = make_right_item_row(right, flags);
        title_item->appendRow(right_row);
     }
 }
 
-void ExtendedPermissionsWidget::append_combined_permissions() {
+void ExtendedPermissionsWidget::load_common_tasks() {
+    class_common_task_rights_map[CLASS_USER] = {CommonTask_UserControl,
+                                           CommonTask_ChangeUserPassword,
+                                           CommonTask_ReadAllUserInformation};
+    class_common_task_rights_map[CLASS_GROUP] = {CommonTask_GroupControl};
+    class_common_task_rights_map[CLASS_INET_ORG_PERSON] = {CommonTask_InetOrgPersonControl,
+                                                      CommonTask_ChangeInetOrgPersonPassword,
+                                                      CommonTask_ReadAllInetOrgPersonInformation};
 
+    common_task_name[CommonTask_UserControl] = tr("Create, delete and manage user accounts");
+    common_task_name[CommonTask_ChangeUserPassword] = tr("Reset user passwords and force password change at next logon");
+    common_task_name[CommonTask_ReadAllUserInformation] = tr("Read all user information");
+    common_task_name[CommonTask_GroupControl] = tr("Create, delete and manage groups");
+    common_task_name[CommonTask_GroupMembership] = tr("Modify the membership of group");
+    common_task_name[CommonTask_ManageGPLinks] = tr("Manage Group Policy links");
+    common_task_name[CommonTask_InetOrgPersonControl] = tr("Create, delete and manage inetOrgPerson accounts");
+    common_task_name[CommonTask_ChangeInetOrgPersonPassword] = tr("Reset inetOrgPerson passwords and force password change at next logon");
+    common_task_name[CommonTask_ReadAllInetOrgPersonInformation] = tr("Read all inetOrgPerson information");
+
+    load_common_tasks_rights();
+}
+
+void ExtendedPermissionsWidget::load_common_tasks_rights() {
+    // Append creation, deletion and control rights for corresponding classes
+    const QHash<QString, CommonTask> creation_deletion_control_map = {
+        {CLASS_USER, CommonTask_UserControl},
+        {CLASS_GROUP, CommonTask_GroupControl},
+        {CLASS_INET_ORG_PERSON, CommonTask_InetOrgPersonControl},
+    };
+
+    for (const QString &obj_class : creation_deletion_control_map.keys()) {
+        CommonTask permission = creation_deletion_control_map[obj_class];
+        common_task_rights[permission] = creation_deletion_rights_for_class(g_adconfig, obj_class) +
+            control_children_class_right(g_adconfig, obj_class);
+    }
+
+    // Append "Reset password and force password change at next logon"
+    // rights for user and inetOrgPerson
+    const QHash<QString, CommonTask> password_change_map = {
+        {CLASS_USER, CommonTask_ChangeUserPassword},
+        {CLASS_INET_ORG_PERSON, CommonTask_ChangeInetOrgPersonPassword},
+    };
+
+    for (const QString &obj_class : password_change_map.keys()) {
+        CommonTask permission = password_change_map[obj_class];
+        common_task_rights[permission] = children_class_read_write_prop_rights(g_adconfig, obj_class, ATTRIBUTE_PWD_LAST_SET);
+    }
+
+    // Append "Read all information" rights for user and inetOrgPerson
+    const QHash<QString, CommonTask> read_all_info_map = {
+        {CLASS_USER, CommonTask_ReadAllUserInformation},
+        {CLASS_INET_ORG_PERSON, CommonTask_ReadAllInetOrgPersonInformation},
+    };
+
+    for (const QString &obj_class : read_all_info_map.keys()) {
+        CommonTask permission = read_all_info_map[obj_class];
+        common_task_rights[permission] = read_all_children_class_info_rights(g_adconfig, obj_class);
+    }
+
+    // Append group membership rights.
+    // NOTE: Group membership task doesnt represent "Membership" extended right.
+    // These generate different ACEs: Membership task delegation doesnt include
+    // memberOf attribute, that included in extended right's property set.
+    // See https://learn.microsoft.com/en-us/windows/win32/adschema/r-membership.
+    common_task_rights[CommonTask_GroupMembership] = children_class_read_write_prop_rights(g_adconfig, CLASS_GROUP, ATTRIBUTE_MEMBER);
+
+    // Append group policy link manage rights
+    common_task_rights[CommonTask_ManageGPLinks] =
+        read_write_prop_rights(g_adconfig, ATTRIBUTE_GPOPTIONS) +
+            read_write_prop_rights(g_adconfig, ATTRIBUTE_GPLINK);
 }
 
 
