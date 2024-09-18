@@ -985,25 +985,46 @@ QList<SecurityRight> ad_security_get_superior_right_list(const SecurityRight &ri
     uint32_t access_mask = right.access_mask;
 
     const bool object_present = !right.object_type.isEmpty();
+    const bool inherited_object_present = !right.inherited_object_type.isEmpty();
+    const bool object_types_present = object_present || inherited_object_present;
 
     const SecurityRight generic_all = {SEC_ADS_GENERIC_ALL, QByteArray(), QByteArray(), 0};
+    const SecurityRight generic_all_inherited = {SEC_ADS_GENERIC_ALL, QByteArray(), right.inherited_object_type, 0};
     const SecurityRight generic_read = {SEC_ADS_GENERIC_READ, QByteArray(), QByteArray(), 0};
     const SecurityRight generic_write = {SEC_ADS_GENERIC_WRITE, QByteArray(), QByteArray(), 0};
     const SecurityRight all_extended_rights = {SEC_ADS_CONTROL_ACCESS, QByteArray(), QByteArray(), 0};
+    const SecurityRight create_child = {SEC_ADS_CREATE_CHILD, QByteArray(), QByteArray(), 0};
+    const SecurityRight delete_child = {SEC_ADS_DELETE_CHILD, QByteArray(), QByteArray(), 0};
 
     // NOTE: order is important, because we want to
     // process "more superior" rights first. "Generic
     // all" is more superior than others.
-    if (object_present) {
+
+    // TODO: Add other superiors with inherited type
+    if (object_types_present) {
         if (access_mask == SEC_ADS_READ_PROP) {
             out.append(generic_all);
             out.append(generic_read);
+            if (inherited_object_present) {
+                out.append(generic_all_inherited);
+            }
         } else if (access_mask == SEC_ADS_WRITE_PROP) {
             out.append(generic_all);
             out.append(generic_write);
+            if (inherited_object_present) {
+                out.append(generic_all_inherited);
+            }
         } else if (access_mask == SEC_ADS_CONTROL_ACCESS) {
             out.append(generic_all);
             out.append(all_extended_rights);
+        } else if (access_mask == SEC_ADS_CREATE_CHILD) {
+            out.append(generic_all);
+            out.append(create_child);
+        } else if (access_mask == SEC_ADS_DELETE_CHILD) {
+            out.append(generic_all);
+            out.append(delete_child);
+        } else if (access_mask == SEC_ADS_GENERIC_ALL) {
+            out.append(generic_all);
         }
     } else {
         if (access_mask == SEC_ADS_GENERIC_READ || access_mask == SEC_ADS_GENERIC_WRITE) {
@@ -1020,36 +1041,51 @@ QList<SecurityRight> ad_security_get_subordinate_right_list(AdConfig *adconfig, 
     uint32_t access_mask = right.access_mask;
 
     const bool object_present = !right.object_type.isEmpty();
+    const bool inherited_object_present = !right.inherited_object_type.isEmpty();
+    const bool object_types_present = object_present || inherited_object_present;
 
     const QList<SecurityRight> right_list_for_target = ad_security_get_right_list_for_class(adconfig, class_list);
 
-    for (const SecurityRight &right : right_list_for_target) {
+    for (const SecurityRight &subordinate_right : right_list_for_target) {
         const bool match = [&]() {
-            const bool right_object_present = !right.object_type.isEmpty();
+            const bool subordinate_object_types_present = !subordinate_right.object_type.isEmpty() || !subordinate_right.inherited_object_type.isEmpty();
 
-            if (object_present) {
+            // TODO: Add other subordinates with inherited type
+            if (object_types_present) {
+                if (inherited_object_present && access_mask == SEC_ADS_GENERIC_ALL) {
+                    // All except full control with the same inherited type
+                    return (subordinate_right.access_mask != access_mask) &&
+                            (right.inherited_object_type == subordinate_right.inherited_object_type);
+                }
                 return false;
             } else {
                 if (access_mask == SEC_ADS_GENERIC_ALL) {
                     // All except full control
-                    return (right.access_mask != access_mask);
+                    return (subordinate_right.access_mask != access_mask) || subordinate_object_types_present;
                 } else if (access_mask == SEC_ADS_GENERIC_READ) {
                     // All read property rights
-                    return (right.access_mask == SEC_ADS_READ_PROP && right_object_present);
+                    return (subordinate_right.access_mask == SEC_ADS_READ_PROP && subordinate_object_types_present);
                 } else if (access_mask == SEC_ADS_GENERIC_WRITE) {
                     // All write property rights
-                    return (right.access_mask == SEC_ADS_WRITE_PROP && right_object_present);
+                    return (subordinate_right.access_mask == SEC_ADS_WRITE_PROP && subordinate_object_types_present);
                 } else if (access_mask == SEC_ADS_CONTROL_ACCESS) {
                     // All extended rights
-                    return (right.access_mask == SEC_ADS_CONTROL_ACCESS && right_object_present);
-                } else {
+                    return (subordinate_right.access_mask == SEC_ADS_CONTROL_ACCESS && subordinate_object_types_present);
+                } else if (access_mask == SEC_ADS_CREATE_CHILD) {
+                    // All create child object rights
+                    return (subordinate_right.access_mask == SEC_ADS_CREATE_CHILD && subordinate_object_types_present);
+                } else if (access_mask == SEC_ADS_DELETE_CHILD) {
+                    // All create child object rights
+                    return (subordinate_right.access_mask == SEC_ADS_DELETE_CHILD && subordinate_object_types_present);
+                }
+                else {
                     return false;
                 }
             }
         }();
 
         if (match) {
-            out.append(right);
+            out.append(subordinate_right);
         }
     }
 
