@@ -2,6 +2,17 @@ admc
 CHANGELOG
 
 -----------------------------------------------------------------------
+ VERSION 0.17.1
+-----------------------------------------------------------------------
+- Delegation permissions are added to "Security" tab from object
+properties. These permissions include common tasks (for organizational
+unit and container classes only), create/delete permissions for
+possible child objects and read/write permissions for object's attributes
+(properties).
+- Common, extended and delegation permissions are splitted and placed
+in corresponding tabs.
+
+-----------------------------------------------------------------------
  VERSION 0.17.0
 -----------------------------------------------------------------------
 - Add password settings object's creation/deletion/edition. Password
