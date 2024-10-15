@@ -42,6 +42,12 @@ enum RightsItemRole {
     RightsItemRole_ItemType
 };
 
+enum AppliedObjects {
+    AppliedObjects_ThisObject,
+    AppliedObjects_ThisAndChildObjects,
+    AppliedObjects_ChildObjectClass
+};
+
 class PermissionsWidget : public QWidget {
     Q_OBJECT
 
@@ -53,7 +59,10 @@ public:
                       security_descriptor *sd) = 0;
     virtual void set_read_only();
     void set_current_trustee(const QByteArray &current_trustee);
-    virtual void update_model_right_items();
+    // Updates permissions for given applied objects case
+    virtual void update_permissions(AppliedObjects applied_objs, const QString &appliable_child_class = QString());
+    // Updates permissions with current applied objects value
+    virtual void update_permissions();
 
 signals:
     void edited();
@@ -77,6 +86,7 @@ protected:
     QLocale::Language language;
     QSortFilterProxyModel *rights_sort_model;
     QVBoxLayout *v_layout;
+    AppliedObjects applied_objects = AppliedObjects_ThisObject;
 
     virtual void on_item_changed(QStandardItem *item);
     virtual void make_model_rights_read_only();

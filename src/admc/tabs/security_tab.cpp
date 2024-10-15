@@ -26,6 +26,7 @@
 #include "select_well_known_trustee_dialog.h"
 #include "utils.h"
 #include "permission_control_widgets/permissions_widget.h"
+#include "globals.h"
 
 #include <QDebug>
 #include <QLabel>
@@ -33,7 +34,6 @@
 #include <QSortFilterProxyModel>
 #include <QStandardItemModel>
 #include <QTreeView>
-
 
 SecurityTab::SecurityTab(QList<AttributeEdit *> *edit_list, QWidget *parent)
 : QWidget(parent) {
@@ -62,7 +62,7 @@ SecurityTab::SecurityTab(QList<AttributeEdit *> *edit_list, QWidget *parent)
                     QList<PermissionsWidget*> other_permission_widgets = permissions_widgets;
                     other_permission_widgets.removeOne(widget);
                     for (PermissionsWidget* perm_wget : other_permission_widgets) {
-                        perm_wget->update_model_right_items();
+                        perm_wget->update_permissions();
                     }
         });
     }
@@ -87,6 +87,10 @@ SecurityTab::SecurityTab(QList<AttributeEdit *> *edit_list, QWidget *parent)
     connect(
         ui->remove_trustee_button, &QAbstractButton::clicked,
         this, &SecurityTab::on_remove_trustee_button);
+
+    connect(
+        ui->applied_objects_cmbBox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+        this, &SecurityTab::on_applied_objs_cmbbox);
 }
 
 void SecurityTab::load(AdInterface &ad, const AdObject &object) {
@@ -94,6 +98,9 @@ void SecurityTab::load(AdInterface &ad, const AdObject &object) {
     sd = object.get_security_descriptor();
 
     const QStringList target_class_list = object.get_strings(ATTRIBUTE_OBJECT_CLASS);
+
+    load_applied_objects_cmbbox(target_class_list);
+
     for (PermissionsWidget *widget : permissions_widgets) {
         widget->init(target_class_list, sd);
     }
@@ -186,6 +193,38 @@ void SecurityTab::load_current_sd(AdInterface &ad) {
     }();
 
     ui->trustee_view->selectionModel()->setCurrentIndex(selected_trustee, QItemSelectionModel::Current | QItemSelectionModel::ClearAndSelect);
+}
+
+void SecurityTab::load_applied_objects_cmbbox(const QStringList &target_class_list) {
+    ui->applied_objects_cmbBox->addItem(tr("This object"), (int)AppliedObjects_ThisObject);
+    ui->applied_objects_cmbBox->addItem(tr("This object and all child objects"), (int)AppliedObjects_ThisAndChildObjects);
+
+    const QString target_class = target_class_list.last();
+    for (const QString &inferior_class : g_adconfig->get_possible_inferiors(target_class)) {
+        const QString item_text = tr("Child objects: ") + g_adconfig->get_class_display_name(inferior_class);
+        ui->applied_objects_cmbBox->addItem(item_text, (int)AppliedObjects_ChildObjectClass);
+        ui->applied_objects_cmbBox->setItemData(ui->applied_objects_cmbBox->count() - 1,
+                                                inferior_class, AppliedObjectRole_ObjectClass);
+    }
+}
+
+void SecurityTab::on_applied_objs_cmbbox() {
+    AppliedObjects applied_objs = (AppliedObjects)ui->applied_objects_cmbBox->currentData().toInt();
+    int task_delegation_tab_index = ui->permissions_tab_widget->indexOf(ui->delegation_tab);
+    if (applied_objs != AppliedObjects_ThisObject) {
+        // NOTE: Task delegation tab is hidden because common tasks are set of predefined rights
+        // and should not vary depending on applied object(s) value
+        ui->permissions_tab_widget->setTabVisible(task_delegation_tab_index, false);
+    }
+    else {
+        ui->permissions_tab_widget->setTabVisible(task_delegation_tab_index, true);
+    }
+
+    const QString obj_class = ui->applied_objects_cmbBox->currentData(AppliedObjectRole_ObjectClass).
+            toString();
+    for (PermissionsWidget* perm_wget : permissions_widgets) {
+       perm_wget->update_permissions(applied_objs, obj_class);
+    }
 }
 
 void SecurityTabEdit::load(AdInterface &ad, const AdObject &object) {

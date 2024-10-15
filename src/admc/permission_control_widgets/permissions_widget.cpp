@@ -65,7 +65,7 @@ void PermissionsWidget::set_read_only() {
 
 void PermissionsWidget::set_current_trustee(const QByteArray &current_trustee) {
     trustee = current_trustee;
-    update_model_right_items();
+    update_permissions(applied_objects);
 }
 
 void PermissionsWidget::on_item_changed(QStandardItem *item) {
@@ -104,12 +104,20 @@ void PermissionsWidget::on_item_changed(QStandardItem *item) {
         }
     }
 
-    update_model_right_items();
+    update_permissions(applied_objects);
 
     emit edited();
 }
 
-void PermissionsWidget::update_model_right_items() {
+void PermissionsWidget::update_permissions(AppliedObjects applied_objs, const QString &appliable_child_class) {
+    Q_UNUSED(applied_objs)
+    Q_UNUSED(appliable_child_class)
+    // TODO: Do update depending on appliable objects
+
+    update_permissions();
+}
+
+void PermissionsWidget::update_permissions() {
     // NOTE: this flag is turned on so that
     // on_item_changed() slot doesn't react to us
     // changing state of items
