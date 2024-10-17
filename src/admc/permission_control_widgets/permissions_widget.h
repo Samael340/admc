@@ -45,6 +45,7 @@ enum RightsItemRole {
 enum AppliedObjects {
     AppliedObjects_ThisObject,
     AppliedObjects_ThisAndChildObjects,
+    AppliedObjects_AllChildObjects,
     AppliedObjects_ChildObjectClass
 };
 

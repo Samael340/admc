@@ -65,7 +65,7 @@ void PermissionsWidget::set_read_only() {
 
 void PermissionsWidget::set_current_trustee(const QByteArray &current_trustee) {
     trustee = current_trustee;
-    update_permissions(applied_objects);
+    update_permissions();
 }
 
 void PermissionsWidget::on_item_changed(QStandardItem *item) {
