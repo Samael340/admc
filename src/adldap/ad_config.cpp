@@ -59,6 +59,7 @@
 #define ATTRIBUTE_POSSIBLE_INFERIORS "possibleInferiors"
 #define ATTRIBUTE_ALLOWED_ATTRIBUTES "allowedAttributes"
 #define ATTRIBUTE_ALLOWED_ATTRIBUTES_EFFECTIVE "allowedAttributesEffective"
+#define ATTRIBUTE_OBJECT_CLASS_CATEGORY "objectClassCategory"
 
 #define CLASS_ATTRIBUTE_SCHEMA "attributeSchema"
 #define CLASS_CLASS_SCHEMA "classSchema"
@@ -601,6 +602,12 @@ QByteArray AdConfig::guid_from_class(const ObjectClass &object_class) {
     return d->guid_to_class_map.key(object_class, QByteArray());
 }
 
+bool AdConfig::class_is_auxiliary(const QString &obj_class) const {
+    const int auxiliary_category_value = 3;
+    const int class_category = d->class_schemas[obj_class].get_int(ATTRIBUTE_OBJECT_CLASS_CATEGORY);
+    return class_category == auxiliary_category_value;
+}
+
 void AdConfig::load_extended_rights(AdInterface &ad)
 {
     const QString filter = filter_CONDITION(Condition_Equals, ATTRIBUTE_OBJECT_CLASS, CLASS_CONTROL_ACCESS_RIGHT);
@@ -689,7 +696,8 @@ void AdConfig::load_class_schemas(AdInterface &ad) {
         ATTRIBUTE_SCHEMA_ID_GUID,
         ATTRIBUTE_SUB_CLASS_OF,
         ATTRIBUTE_SCHEMA_ID_GUID,
-        ATTRIBUTE_POSSIBLE_INFERIORS
+        ATTRIBUTE_POSSIBLE_INFERIORS,
+        ATTRIBUTE_OBJECT_CLASS_CATEGORY
     };
 
     const QHash<QString, AdObject> results = ad.search(schema_dn(), SearchScope_Children, filter, attributes);

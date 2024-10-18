@@ -117,6 +117,8 @@ public:
 
     QByteArray guid_from_class(const ObjectClass &object_class);
 
+    bool class_is_auxiliary(const QString &obj_class) const;
+
 private:
     void load_extended_rights(AdInterface &ad);
     void load_attribute_schemas(AdInterface &ad);
