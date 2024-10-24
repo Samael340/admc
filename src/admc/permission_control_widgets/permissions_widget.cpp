@@ -58,6 +58,12 @@ PermissionsWidget::PermissionsWidget(QWidget *parent) :
     language = saved_locale.language();
 }
 
+void PermissionsWidget::init(const QStringList &target_classes, security_descriptor *sd_arg) {
+    sd = sd_arg;
+    target_class_list = target_classes;
+    rights_model->removeRows(0, rights_model->rowCount());
+}
+
 void PermissionsWidget::set_read_only() {
     read_only = true;
     make_model_rights_read_only();
@@ -104,17 +110,9 @@ void PermissionsWidget::on_item_changed(QStandardItem *item) {
         }
     }
 
-    update_permissions(applied_objects);
+    update_permissions();
 
     emit edited();
-}
-
-void PermissionsWidget::update_permissions(AppliedObjects applied_objs, const QString &appliable_child_class) {
-    Q_UNUSED(applied_objs)
-    Q_UNUSED(appliable_child_class)
-    // TODO: Do update depending on appliable objects
-
-    update_permissions();
 }
 
 void PermissionsWidget::update_permissions() {
@@ -125,7 +123,7 @@ void PermissionsWidget::update_permissions() {
 
     for (int row = 0; row < rights_model->rowCount(); row++) {
         const QModelIndex index = rights_model->index(row, 0);
-        if (!index.isValid()) {
+        if (!index.isValid() || item_is_message(index)) {
             continue;
         }
 
@@ -178,6 +176,33 @@ void PermissionsWidget::make_model_rights_read_only() {
     ignore_item_changed_signal = false;
 }
 
+void PermissionsWidget::show_no_rights_message(bool show) {
+    if (!message_index.isValid()) {
+        return;
+    }
+
+    rights_model->setData(message_index, !show, RightsItemRole_HiddenItem);
+}
+
+bool PermissionsWidget::item_is_message(const QModelIndex &index) const {
+    return index == message_index;
+}
+
+void PermissionsWidget::append_message_item() {
+    if (message_index.isValid()) {
+        return;
+    }
+
+    QList<QStandardItem *> message_row = make_item_row(PermissionColumn_COUNT);
+    message_row[0]->setText(tr("There are no rights for this class of objects"));
+    message_row[0]->setData(true, RightsItemRole_HiddenItem);
+    for (QStandardItem *item : message_row) {
+        item->setEditable(false);
+    }
+    rights_model->appendRow(message_row);
+    message_index = rights_model->indexFromItem(message_row[0]);
+}
+
 void PermissionsWidget::update_row_check_state(int row, QList<SecurityRight> &rights, bool ignore_inheritance) {
     const QHash<SecurityRightStateType, QModelIndex> checkable_index_map = {
         {SecurityRightStateType_Allow, rights_model->index(row, PermissionColumn_Allowed)},
@@ -217,4 +242,13 @@ void PermissionsWidget::update_row_check_state(int row, QList<SecurityRight> &ri
             right_state_checked_map[type] = check_state;
         }
     }
+}
+
+void RightsSortModel::hide_ignored_items() {
+    invalidateFilter();
+}
+
+bool RightsSortModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const {
+    const QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
+    return !index.data(RightsItemRole_HiddenItem).toBool();
 }

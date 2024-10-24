@@ -608,6 +608,28 @@ bool AdConfig::class_is_auxiliary(const QString &obj_class) const {
     return class_category == auxiliary_category_value;
 }
 
+QList<QString> AdConfig::all_inferiors_list(const QString &obj_class) const {
+    QList<QString> out;
+    for (const QString &inferior_class : get_possible_inferiors(obj_class)) {
+        out.append(inferior_class);
+        out.append(get_possible_inferiors(inferior_class));
+    }
+    // Remove duplicates with converting to set and back
+    out = QSet<QString>(out.begin(), out.end()).values();
+
+    return out;
+}
+
+QList<QString> AdConfig::all_extended_right_classes() const {
+    QList<QString> out;
+    for (auto obj_classes : d->rights_applies_to_map.values()) {
+        out.append(obj_classes);
+    }
+    // Remove duplicates with QSet
+    out = QSet<QString>(out.begin(), out.end()).values();
+    return out;
+}
+
 void AdConfig::load_extended_rights(AdInterface &ad)
 {
     const QString filter = filter_CONDITION(Condition_Equals, ATTRIBUTE_OBJECT_CLASS, CLASS_CONTROL_ACCESS_RIGHT);

@@ -74,7 +74,7 @@ struct SecurityRight {
     QByteArray inherited_object_type;
     uint8_t flags;
 
-    inline bool operator ==(const SecurityRight &another) {
+    inline bool operator ==(const SecurityRight &another) const {
         return (another.access_mask == access_mask) &&
                 (another.object_type == object_type) &&
                 (another.inherited_object_type == inherited_object_type) &&

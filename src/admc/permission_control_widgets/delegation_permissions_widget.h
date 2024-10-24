@@ -23,6 +23,7 @@ public:
 
     virtual void init(const QStringList &target_classes,
                       security_descriptor *sd_arg) override;
+    virtual void update_permissions(AppliedObjects applied_objs, const QString &appliable_child_class) override;
 private:
     void append_common_tasks();
     void append_schema_objects_permissions(DelegationItemType type);

@@ -34,10 +34,11 @@ public:
 
     virtual void init(const QStringList &target_classes,
                       security_descriptor *sd_arg) override;
+    virtual void update_permissions(AppliedObjects applied_objs, const QString &appliable_child_class) override;
 
 private:
     QList<QStandardItem*> make_extended_right_item_row(const SecurityRight &right);
-    void append_extended_right_items();
+    bool right_applies_to_class(const SecurityRight &right, const QString &obj_class);
 };
 
 #endif // EXTENDED_PERMISSIONS_WIDGET_H

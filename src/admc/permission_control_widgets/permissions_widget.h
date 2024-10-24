@@ -22,6 +22,7 @@
 
 #include <QWidget>
 #include <QLocale>
+#include <QSortFilterProxyModel>
 
 class QStandardItemModel;
 class QStandardItem;
@@ -32,6 +33,7 @@ class QSortFilterProxyModel;
 class QModelIndex;
 class QVBoxLayout;
 struct SecurityRight;
+class QSortFilterProxyModel;
 
 
 enum RightsItemRole {
@@ -39,7 +41,8 @@ enum RightsItemRole {
     RightsItemRole_SecurityRightList,
     // ObjectTypeName serves as item data type for sorting purpose
     RightsItemRole_ObjectTypeName,
-    RightsItemRole_ItemType
+    RightsItemRole_ItemType,
+    RightsItemRole_HiddenItem
 };
 
 enum AppliedObjects {
@@ -47,6 +50,15 @@ enum AppliedObjects {
     AppliedObjects_ThisAndChildObjects,
     AppliedObjects_AllChildObjects,
     AppliedObjects_ChildObjectClass
+};
+
+class RightsSortModel : public QSortFilterProxyModel {
+public:
+    using QSortFilterProxyModel::QSortFilterProxyModel;
+    void hide_ignored_items();
+
+protected:
+    virtual bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override;
 };
 
 class PermissionsWidget : public QWidget {
@@ -57,11 +69,11 @@ public:
     virtual ~PermissionsWidget() = default;
 
     virtual void init(const QStringList &target_classes,
-                      security_descriptor *sd) = 0;
+                      security_descriptor *sd_arg);
     virtual void set_read_only();
     void set_current_trustee(const QByteArray &current_trustee);
     // Updates permissions for given applied objects case
-    virtual void update_permissions(AppliedObjects applied_objs, const QString &appliable_child_class = QString());
+    virtual void update_permissions(AppliedObjects applied_objs, const QString &appliable_child_class = QString()) = 0;
     // Updates permissions with current applied objects value
     virtual void update_permissions();
 
@@ -85,12 +97,17 @@ protected:
     QByteArray trustee;
     QStringList target_class_list;
     QLocale::Language language;
-    QSortFilterProxyModel *rights_sort_model;
+    RightsSortModel *rights_sort_model;
     QVBoxLayout *v_layout;
     AppliedObjects applied_objects = AppliedObjects_ThisObject;
+    QPersistentModelIndex message_index;
 
     virtual void on_item_changed(QStandardItem *item);
     virtual void make_model_rights_read_only();
+
+    void show_no_rights_message(bool show);
+    bool item_is_message(const QModelIndex &index) const;
+    void append_message_item();
 
 private:
     void update_row_check_state(int row, QList<SecurityRight> &rights, bool ignore_inheritance);

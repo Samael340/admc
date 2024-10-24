@@ -34,9 +34,9 @@
 #include <QDebug>
 
 
-class ExtendedRightsSortModel final : public QSortFilterProxyModel {
+class ExtendedRightsSortModel final : public RightsSortModel {
 public:
-    using QSortFilterProxyModel::QSortFilterProxyModel;
+    using RightsSortModel::RightsSortModel;
 
     bool lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const override {
         SecurityRight left = source_left.data(RightsItemRole_SecurityRight).
@@ -98,13 +98,85 @@ ExtendedPermissionsWidget::~ExtendedPermissionsWidget() {
 }
 
 void ExtendedPermissionsWidget::init(const QStringList &target_classes, security_descriptor *sd_arg) {
-    sd = sd_arg;
-    target_class_list = target_classes;
-    rights_model->removeRows(0, rights_model->rowCount());
+    PermissionsWidget::init(target_classes, sd_arg);
+    append_message_item();
 
-    append_extended_right_items();
+    const QString target_class = target_class_list.last();
+    const QStringList all_inferiors = g_adconfig->all_inferiors_list(target_class);
+    const QStringList all_ext_right_classes = g_adconfig->all_extended_right_classes();
+    // Get inferiors that have extended rights with intersecting two lists above (also add target class)
+    QSet<QString> ext_rights_class_set = QSet<QString>(all_inferiors.begin(), all_inferiors.end()).intersect(
+                QSet<QString>(all_ext_right_classes.begin(), all_ext_right_classes.end()));
+    ext_rights_class_set.insert(target_class);
+
+    const QList<SecurityRight> extended_right_list = ad_security_get_extended_rights_for_class(g_adconfig, ext_rights_class_set.values());
+    for(const SecurityRight &right : extended_right_list) {
+       QList<QStandardItem*> right_row = make_extended_right_item_row(right);
+       rights_model->appendRow(right_row);
+    }
 
     rights_sort_model->sort(0);
+}
+
+void ExtendedPermissionsWidget::update_permissions(AppliedObjects applied_objs, const QString &appliable_child_class) {
+    applied_objects = applied_objs;
+    ignore_item_changed_signal = true;
+
+    const QString obj_class = appliable_child_class.isEmpty() ? target_class_list.last() :
+                                                                   appliable_child_class;
+    const bool there_are_rights = g_adconfig->all_extended_right_classes().contains(obj_class);
+    show_no_rights_message(!there_are_rights);
+
+    for (int row = 0; row < rights_model->rowCount(); row++) {
+        const QModelIndex index = rights_model->index(row, 0);
+
+        if (item_is_message(index)) {
+            continue;
+        }
+
+        SecurityRight right = rights_model->data(index, RightsItemRole_SecurityRight).value<SecurityRight>();
+
+        if (!there_are_rights || !right_applies_to_class(right, obj_class)) {
+            rights_model->setData(index, true, RightsItemRole_HiddenItem);
+            continue;
+        }
+
+        switch (applied_objs) {
+        case AppliedObjects_ThisObject:
+            right.flags = 0;
+            right.inherited_object_type = QByteArray();
+            break;
+
+        case AppliedObjects_ThisAndChildObjects:
+            right.flags = SEC_ACE_FLAG_CONTAINER_INHERIT;
+            right.inherited_object_type = QByteArray();
+            break;
+
+        case AppliedObjects_AllChildObjects:
+            right.flags = SEC_ACE_FLAG_CONTAINER_INHERIT | SEC_ACE_FLAG_INHERIT_ONLY;
+            right.inherited_object_type = QByteArray();
+            break;
+
+        case AppliedObjects_ChildObjectClass:
+            right.flags = SEC_ACE_FLAG_CONTAINER_INHERIT | SEC_ACE_FLAG_INHERIT_ONLY;
+            right.inherited_object_type = g_adconfig->guid_from_class(appliable_child_class);
+            break;
+
+        default:
+            ignore_item_changed_signal = false;
+            return;
+        }
+
+        QVariant right_data;
+        right_data.setValue(right);
+        rights_model->setData(index, right_data, RightsItemRole_SecurityRight);
+        rights_model->setData(index, false, RightsItemRole_HiddenItem);
+    }
+
+    rights_sort_model->hide_ignored_items();
+    ignore_item_changed_signal = false;
+
+    PermissionsWidget::update_permissions();
 }
 
 
@@ -130,12 +202,12 @@ QList<QStandardItem *> ExtendedPermissionsWidget::make_extended_right_item_row(c
     return row;
 }
 
-
-void ExtendedPermissionsWidget::append_extended_right_items() {
-    const QList<SecurityRight> extended_right_list = ad_security_get_extended_rights_for_class(g_adconfig, target_class_list);
-
-    for(const SecurityRight &right : extended_right_list) {
-       QList<QStandardItem*> right_row = make_extended_right_item_row(right);
-       rights_model->appendRow(right_row);
+bool ExtendedPermissionsWidget::right_applies_to_class(const SecurityRight &right, const QString &obj_class) {
+    for (const SecurityRight &ext_right : ad_security_get_extended_rights_for_class(g_adconfig, {obj_class})) {
+        if (ext_right.access_mask == right.access_mask && ext_right.object_type == right.object_type) {
+            return true;
+        }
     }
+
+    return false;
 }

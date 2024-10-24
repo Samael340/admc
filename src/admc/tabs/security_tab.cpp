@@ -34,6 +34,7 @@
 #include <QSortFilterProxyModel>
 #include <QStandardItemModel>
 #include <QTreeView>
+#include <algorithm>
 
 SecurityTab::SecurityTab(QList<AttributeEdit *> *edit_list, QWidget *parent)
 : QWidget(parent) {
@@ -54,7 +55,7 @@ SecurityTab::SecurityTab(QList<AttributeEdit *> *edit_list, QWidget *parent)
 
     permissions_widgets.append(ui->common_permissions_widget);
     permissions_widgets.append(ui->extended_permissions_widget);
-    permissions_widgets.append(ui->delegation_widget);
+    //permissions_widgets.append(ui->delegation_widget);
     for (PermissionsWidget *widget : permissions_widgets) {
         connect(widget, &PermissionsWidget::edited,
                 [this, widget](){
@@ -94,18 +95,26 @@ SecurityTab::SecurityTab(QList<AttributeEdit *> *edit_list, QWidget *parent)
 }
 
 void SecurityTab::load(AdInterface &ad, const AdObject &object) {
+    // TODO: Remove security tab self reload after changes applying (because its excessive).
+    // Probably this should be done for other tabs too.
+
     security_descriptor_free(sd);
     sd = object.get_security_descriptor();
 
     const QStringList target_class_list = object.get_strings(ATTRIBUTE_OBJECT_CLASS);
-
-    load_applied_objects_cmbbox(target_class_list);
 
     for (PermissionsWidget *widget : permissions_widgets) {
         widget->init(target_class_list, sd);
     }
 
     load_current_sd(ad);
+
+    if (ui->applied_objects_cmbBox->count() == 0) {
+        load_applied_objects_cmbbox(target_class_list);
+    }
+    else {
+        on_applied_objs_cmbbox();
+    }
 
     is_policy = object.is_class(CLASS_GP_CONTAINER);
 }
@@ -201,11 +210,37 @@ void SecurityTab::load_applied_objects_cmbbox(const QStringList &target_class_li
     ui->applied_objects_cmbBox->addItem(tr("All child objects"), (int)AppliedObjects_AllChildObjects);
 
     const QString target_class = target_class_list.last();
-    for (const QString &inferior_class : g_adconfig->get_possible_inferiors(target_class)) {
-        const QString item_text = tr("Child objects: ") + g_adconfig->get_class_display_name(inferior_class);
+    QStringList inferior_class_list = g_adconfig->all_inferiors_list(target_class);
+
+    QHash<QString, QString> text_class_map;
+    QStringList translated_class_names;
+    QStringList not_translated_class_names;
+    for (auto inferior : inferior_class_list) {
+        // Dont add auxiliary classes that have no assignable permissions
+        if (g_adconfig->class_is_auxiliary(inferior)) {
+            continue;
+        }
+
+        const QString text = g_adconfig->get_class_display_name(inferior);
+        text_class_map[text] = inferior;
+        if (text != inferior) {
+            translated_class_names.append(text);
+        }
+        else {
+            not_translated_class_names.append(text);
+        }
+    }
+    // Sort translated and not translated classes separately to put first on second
+    std::sort(translated_class_names.begin(), translated_class_names.end(), std::less<QString>());
+    std::sort(not_translated_class_names.begin(), not_translated_class_names.end(), std::less<QString>());
+
+    QStringList sorted_class_names = translated_class_names + not_translated_class_names;
+
+    for (const QString &class_name : sorted_class_names) {
+        const QString item_text = tr("Child objects: ") + class_name;
         ui->applied_objects_cmbBox->addItem(item_text, (int)AppliedObjects_ChildObjectClass);
         ui->applied_objects_cmbBox->setItemData(ui->applied_objects_cmbBox->count() - 1,
-                                                inferior_class, AppliedObjectRole_ObjectClass);
+                                                text_class_map[class_name], AppliedObjectRole_ObjectClass);
     }
 }
 
@@ -223,6 +258,7 @@ void SecurityTab::on_applied_objs_cmbbox() {
 
     const QString obj_class = ui->applied_objects_cmbBox->currentData(AppliedObjectRole_ObjectClass).
             toString();
+
     for (PermissionsWidget* perm_wget : permissions_widgets) {
        perm_wget->update_permissions(applied_objs, obj_class);
     }

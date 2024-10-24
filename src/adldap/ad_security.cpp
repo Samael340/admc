@@ -490,20 +490,20 @@ SecurityRightState security_descriptor_get_right_state(const security_descriptor
         // reading personal info (mask *is*
         // "read property" and contains
         // some object)
-        SecurityRight right_with_object = {right.access_mask, right.object_type,
-                                         right.inherited_object_type, ace.flags};
-        SecurityRight right_without_object_type = {right.access_mask, QByteArray(),
-                                         right.inherited_object_type, ace.flags};
-        SecurityRight right_without_types = {right.access_mask, QByteArray(),
-                                         QByteArray(), ace.flags};
+//        SecurityRight right_with_object = {right.access_mask, right.object_type,
+//                                         right.inherited_object_type, ace.flags};
+//        SecurityRight right_without_object_type = {right.access_mask, QByteArray(),
+//                                         right.inherited_object_type, ace.flags};
+//        SecurityRight right_without_types = {right.access_mask, QByteArray(),
+//                                         QByteArray(), ace.flags};
 
-        const bool match_for_allow = ace_match(ace, trustee, right_with_object, true) ||
+        const bool match_for_allow = ace_match(ace, trustee, right, true) /*||
                 ace_match(ace, trustee, right_without_object_type, true) ||
-                ace_match(ace, trustee, right_without_types, true);
+                ace_match(ace, trustee, right_without_types, true)*/;
 
-        const bool match_for_deny = ace_match(ace, trustee, right_with_object, false) ||
+        const bool match_for_deny = ace_match(ace, trustee, right, false) /*||
                 ace_match(ace, trustee, right_without_object_type, false) ||
-                ace_match(ace, trustee, right_without_types, false);
+                ace_match(ace, trustee, right_without_types, false)*/;
 
         // If there is no match, continue to search corresponding ACEs
         if (!(match_for_allow || match_for_deny)) {

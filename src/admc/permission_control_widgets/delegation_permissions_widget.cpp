@@ -17,9 +17,9 @@
 #include <QHBoxLayout>
 // #include <QComboBox>
 
-class DelegationSortModel final : public QSortFilterProxyModel {
+class DelegationSortModel final : public RightsSortModel {
 public:
-    using QSortFilterProxyModel::QSortFilterProxyModel;
+    using RightsSortModel::RightsSortModel;
 
     void set_visible_item_type(DelegationPermissionsWidget::DelegationItemType type) {
         visible_type = type;
@@ -143,6 +143,11 @@ void DelegationPermissionsWidget::init(const QStringList &target_classes, securi
     append_schema_objects_permissions(DelegationItemType_PropertyPermission);
 
     rights_sort_model->sort(0);
+}
+
+void DelegationPermissionsWidget::update_permissions(AppliedObjects applied_objs, const QString &appliable_child_class) {
+    Q_UNUSED(applied_objs)
+    Q_UNUSED(appliable_child_class)
 }
 
 void DelegationPermissionsWidget::append_common_tasks() {
