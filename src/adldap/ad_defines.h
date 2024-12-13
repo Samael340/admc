@@ -217,6 +217,7 @@ enum SystemFlagsBit {
 #define ATTRIBUTE_MS_DS_PASSWORD_SETTINGS_PRECEDENCE "msDS-PasswordSettingsPrecedence"
 #define ATTRIBUTE_PSO_APPLIES_TO "msDS-PSOAppliesTo"
 #define ATTRIBUTE_DEFAULT_NAMING_CONTEXT "defaultNamingContext"
+#define ATTRIBUTE_MIDDLE_NAME "middleName"
 
 
 #define CLASS_GROUP "group"
