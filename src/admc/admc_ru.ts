@@ -633,6 +633,11 @@
         <source>Display name:</source>
         <translation>Отображаемое имя:</translation>
     </message>
+    <message>
+        <location filename="create_dialogs/create_contact_dialog.ui" line="75"/>
+        <source>Middle name:</source>
+        <translation>Отчество:</translation>
+    </message>
 </context>
 <context>
     <name>CreateGroupDialog</name>
@@ -859,7 +864,12 @@
         <translation>Показывать пароль</translation>
     </message>
     <message>
-        <location filename="create_dialogs/create_user_dialog.ui" line="137"/>
+        <location filename="create_dialogs/create_user_dialog.ui" line="138"/>
+        <source>Middle Name:</source>
+        <translation>Отчество:</translation>
+    </message>
+    <message>
+        <location filename="create_dialogs/create_user_dialog.ui" line="147"/>
         <source>Account options:</source>
         <translation>Параметры учётной записи:</translation>
     </message>
@@ -1816,6 +1826,11 @@
         <source>Other...</source>
         <translation>Другие...</translation>
     </message>
+    <message>
+        <location filename="tabs/general_user_tab.ui" line="163"/>
+        <source>Middle Name:</source>
+        <translation>Отчество:</translation>
+    </message>
 </context>
 <context>
     <name>GroupPolicyTab</name>
@@ -2327,7 +2342,12 @@
         <translation>Загружать значения необязательных атрибутов</translation>
     </message>
     <message>
-        <location filename="main_window.ui" line="292"/>
+        <location filename="main_window.ui" line="415"/>
+        <source>Show middle name when creating</source>
+        <translation>Показывать отчество при создании</translation>
+    </message>
+    <message>
+        <location filename="main_window.ui" line="293"/>
         <source>Navigate Up</source>
         <translation>Наверх</translation>
     </message>
