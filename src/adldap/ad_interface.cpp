@@ -1637,6 +1637,7 @@ bool AdInterface::init_smb_context() {
 bool AdInterface::gpo_check_perms(const QString &gpo, bool *ok) {
     // NOTE: skip perms check for non-admins, because don't
     // have enough rights to get full sd
+    // TODO: check sd read permissions here and write corresponding error message
     if (!logged_in_as_domain_admin()) {
         return true;
     }
