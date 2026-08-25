@@ -93,6 +93,7 @@ QString locale_to_code(const QLocale &locale) {
 
 void AdConfig::load(AdInterface &ad, const QLocale &locale) {
     d->domain = ad.get_domain();
+    d->user = ad.client_user();
 
     d->filter_containers.clear();
     d->columns.clear();
@@ -184,6 +185,9 @@ QString AdConfig::pso_container_dn() const {
     return QString("CN=Password Settings Container,CN=System,%1").arg(domain_dn());
 }
 
+QString AdConfig::user() const {
+    return d->user;
+}
 
 /**
  * NOTE: display specifier doesn't cover all attributes for all classes, so need

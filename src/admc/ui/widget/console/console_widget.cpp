@@ -30,6 +30,7 @@
 #include "core/console_item_type.h"
 #include "core/globals.h"
 #include "ui/status.h"
+#include "ad_config.h"
 
 #include <QAction>
 #include <QApplication>
@@ -233,6 +234,8 @@ ConsoleWidget::ConsoleWidget(QWidget *parent)
             d->scope_view->expand(index_proxy);
         }
     });
+
+    d->tree_state_manager = TreeStateManager(this, d->scope_view, g_adconfig->domain(), g_adconfig->user());
 }
 
 void ConsoleWidget::register_impl(const int type, ConsoleImpl *impl) {
